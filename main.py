@@ -1,6 +1,7 @@
 import os, random, asyncio
 from datetime import datetime
 from pyrogram import Client, filters
+from pyrogram.enums import ChatAction
 
 # ==== ENV ====
 API_ID = int(os.environ["API_ID"])
@@ -47,7 +48,7 @@ def day_greeting():
     else:              return "late night talks are my favorite 🌙"
 
 async def type_pause(chat_id, a=0.6, b=1.6):
-    await app.send_chat_action(chat_id, "typing")
+    await app.send_chat_action(chat_id, ChatAction.TYPING)
     await asyncio.sleep(random.uniform(a, b))
 
 # ===== Commands =====
@@ -139,4 +140,3 @@ async def chat(_, m):
 
 print("✅ Zaya (EN) is running…")
 app.run()
-
