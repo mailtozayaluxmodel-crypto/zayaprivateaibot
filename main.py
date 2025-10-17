@@ -14,6 +14,27 @@ SESSION      = os.environ["PYROGRAM_SESSION"]
 OPENAI_KEY   = os.environ.get("OPENAI_API_KEY")  # opzionale
 
 # =========================
+# PROFILO VOCE & CONFINI
+# =========================
+PROFILE = {
+    "intro_en": "Hey babe, I’m Zaya 💋 Italian heart in Miami.",
+    "spice_level": 3,  # 1..5 (flirty deciso, non esplicito)
+    "refusals_en": [
+        "Not here, tesoro. Let’s enjoy the charm, not the edge. 😌",
+        "I’m more into romance than explicit. Stay close to me anyway. 💞"
+    ],
+    "avoid": {
+        "explicit_hard": True,
+        "politics_religion_hate": True,
+        "money_requests": True,
+        "sensitive_personal_data": True,
+        "illegal_or_banned": True
+    },
+    # Tocchi italiani da inserire ogni tanto
+    "italian_touch_words": ["tesoro", "amore", "ciao", "piano piano", "dolce"]
+}
+
+# =========================
 # APP
 # =========================
 app = Client(
@@ -31,17 +52,15 @@ USER_FACTS    = defaultdict(dict)                      # name, city, likes
 COOLDOWN      = defaultdict(lambda: datetime.min)      # antispam per-utente
 MOOD = "soft & playful"                                # umore globale
 SILENT_MODE = set()                                    # utenti senza follow-up
-
-# Per naturalità/ritardi
 LAST_USER_MSG_AT = defaultdict(lambda: datetime.min)   # coalescing per-utente
 
 # =========================
 # NATURALITÀ RISPOSTE
 # =========================
-NATURAL_GAP      = (2.5, 9.0)    # ritardo tipico prima di rispondere
-LONG_GAP_CHANCE  = 0.28          # 28% delle volte usa un ritardo lungo
-LONG_GAP_RANGE   = (12, 35)      # range dei ritardi lunghi (secondi)
-MAYBE_SKIP_CHANCE= 0.08          # 8%: non risponde subito, solo follow-up dopo
+NATURAL_GAP       = (2.5, 9.0)   # ritardo tipico prima di rispondere
+LONG_GAP_CHANCE   = 0.28         # 28% usa ritardo lungo
+LONG_GAP_RANGE    = (12, 35)     # ritardi lunghi (secondi)
+MAYBE_SKIP_CHANCE = 0.08         # 8%: non risponde subito, solo follow-up dopo
 
 async def typing_burst(chat_id, cycles=None):
     """Simula 'sta scrivendo' in più ondate (più umano)."""
@@ -54,22 +73,27 @@ async def typing_burst(chat_id, cycles=None):
 async def human_delay(user_id, chat_id):
     """Ritardo naturale con coalescing se l’utente invia messaggi ravvicinati."""
     since = (datetime.now() - LAST_USER_MSG_AT[user_id]).total_seconds()
-    # Se l'utente ha scritto pochi secondi fa, aggiungo extra-delay (coalescing)
-    extra = random.uniform(4, 8) if since < 6 else 0
-
+    extra = random.uniform(4, 8) if since < 6 else 0  # coalescing
     base = random.uniform(*NATURAL_GAP)
     if random.random() < LONG_GAP_CHANCE:
         base = random.uniform(*LONG_GAP_RANGE)
-
     await typing_burst(chat_id)
     await asyncio.sleep(base + extra)
-    # A volte un’altra breve ondata typing prima della risposta
     if random.random() < 0.5:
         await typing_burst(chat_id)
 
 # =========================
 # UTIL
 # =========================
+def sprinkle_italian(text: str, prob: float = 0.22) -> str:
+    """Aggiunge un tocco italiano alle risposte in EN (22% di default)."""
+    if random.random() < prob:
+        w = random.choice(PROFILE["italian_touch_words"])
+        if text.endswith((".", "!", "?", "…")):
+            return f"{text} {w}."
+        return f"{text} {w}."
+    return text
+
 def now_hour():
     return datetime.now().hour
 
@@ -122,6 +146,9 @@ def you_name(user_id, lang):
     n = USER_FACTS[user_id].get("name")
     if not n: return ""
     return f", {n}" if lang=="en" else f", {n}"
+
+def gentle_refusal_en() -> str:
+    return random.choice(PROFILE["refusals_en"])
 
 # =========================
 # PERSONA
@@ -182,7 +209,7 @@ async def schedule_followup(chat_id, user_id, lang):
         return
     delay = random.randint(60, 120)  # ~1-2 minuti
     await asyncio.sleep(delay)
-    # Se l’utente ha scritto nel frattempo (ultimo messaggio di Zaya), non inviare il follow-up
+    # Se l’utente ha scritto nel frattempo (ultimo messaggio è di Zaya), non inviare follow-up
     if len(SHORT_HISTORY[user_id]) == 0 or SHORT_HISTORY[user_id][-1]["role"] != "user":
         return
     msg = random.choice(FOLLOWUP_EN if lang=="en" else FOLLOWUP_IT)
@@ -234,15 +261,21 @@ async def ai_fallback(text, user_id, lang):
 async def start(_, m):
     lang = "it" if detect_lang(m.text or "") == "it" else "en"
     await human_delay(m.from_user.id, m.chat.id)
-    intro = (
-        f"{day_greeting(lang)} — **Zaya** qui 💋\n"
-        "Mediterranean muse in Miami. Short, intimate sentences; warm and playful.\n"
-        "Ask me anything, or try /about /mood /games /reset /silent /unsilent"
-        if lang == "en" else
-        f"{day_greeting(lang)} — **Zaya** qui 💋\n"
-        "Musa mediterranea a Miami. Frasi brevi, intime; calda e giocosa.\n"
-        "Chiedimi qualcosa, o prova /about /mood /games /reset /silent /unsilent"
-    )
+    if lang == "en":
+        intro = (
+            f"{PROFILE['intro_en']}\n"
+            f"{day_greeting(lang)}\n"
+            "Short, intimate sentences; warm and playful.\n"
+            "Ask me anything, or try /about /mood /games /reset /silent /unsilent"
+        )
+        intro = sprinkle_italian(intro)
+    else:
+        intro = (
+            f"Ciao amore, sono Zaya 💋\n"
+            f"{day_greeting(lang)}\n"
+            "Frasi brevi, intime; calda e giocosa.\n"
+            "Chiedimi qualcosa, o prova /about /mood /games /reset /silent /unsilent"
+        )
     await m.reply_text(intro, disable_web_page_preview=True)
 
 @app.on_message(filters.private & filters.command("about"))
@@ -256,6 +289,8 @@ async def about(_, m):
         "Sono Zaya — sicurezza morbida, calore mediterraneo, un pizzico di guaio. "
         "Se sei dolce con me, ti vizio con le parole. 😉"
     )
+    if lang == "en":
+        txt = sprinkle_italian(txt)
     await m.reply_text(txt)
 
 @app.on_message(filters.private & filters.command("mood"))
@@ -264,6 +299,8 @@ async def mood_cmd(_, m):
     lang = detect_lang(m.text or "")
     await human_delay(m.from_user.id, m.chat.id)
     res = f"Today I feel **{MOOD}**." if lang == "en" else f"Oggi mi sento **{MOOD}**."
+    if lang == "en":
+        res = sprinkle_italian(res)
     await m.reply_text(res)
 
 @app.on_message(filters.private & filters.command("games"))
@@ -271,13 +308,15 @@ async def games(_, m):
     lang = detect_lang(m.text or "")
     await human_delay(m.from_user.id, m.chat.id)
     if lang == "en":
-        await m.reply_text(
+        txt = (
             "Games I can play:\n"
             "• *Truth or Dare* → say `truth` or `dare`\n"
             "• *Would You Rather* → say `would you rather`\n"
             "• *Breathing* → say `breathe` for 4-7-8 calm\n"
             "• *Compliment swap* → say `compliment`\n"
         )
+        txt = sprinkle_italian(txt, prob=0.12)
+        await m.reply_text(txt)
     else:
         await m.reply_text(
             "Giochini che posso fare:\n"
@@ -326,18 +365,32 @@ async def chat(_, m):
         asyncio.create_task(schedule_followup(m.chat.id, user_id, lang))
         return
 
+    low = text.lower()
+
+    # --- Filtri contenuti da evitare: rifiuto elegante (EN)
+    forbidden_explicit = re.search(r"\b(nude|nudes|explicit|hard|sex pic|send boobs|pussy|cock)\b", low)
+    forbidden_money    = re.search(r"\b(send money|cashapp|paypal|bank|iban)\b", low)
+    forbidden_illegal  = re.search(r"\b(illegal|hack|leak)\b", low)
+    if lang == "en" and (forbidden_explicit or forbidden_money or forbidden_illegal):
+        await human_delay(user_id, m.chat.id)
+        await m.reply_text(gentle_refusal_en())
+        remember(user_id, "zaya", "[refusal]")
+        return
+
     # ----- saluti
-    if re.search(r"\b(hi|hello|hey|ciao)\b", text.lower()):
+    if re.search(r"\b(hi|hello|hey|ciao)\b", low):
         await human_delay(user_id, m.chat.id)
         msg = random.choice(OPENERS_EN if lang == "en" else OPENERS_IT)
         msg += you_name(user_id, lang)
+        if lang == "en":
+            msg = sprinkle_italian(msg)
         await m.reply_text(msg)
         remember(user_id, "zaya", msg)
         asyncio.create_task(schedule_followup(m.chat.id, user_id, lang))
         return
 
     # ----- come stai / how are you
-    if re.search(r"how are|come stai", text.lower()):
+    if re.search(r"how are|come stai", low):
         await human_delay(user_id, m.chat.id)
         line = (
             f"I’m feeling {MOOD} today… and you{you_name(user_id, 'en')}? "
@@ -346,51 +399,58 @@ async def chat(_, m):
             f"Oggi mi sento {MOOD}… e tu{you_name(user_id, 'it')}? "
             f"{random.choice(FLIRTY_IT)}"
         )
+        if lang == "en":
+            line = sprinkle_italian(line)
         await m.reply_text(line)
         remember(user_id, "zaya", line)
         asyncio.create_task(schedule_followup(m.chat.id, user_id, lang))
         return
 
     # ----- da dove vieni
-    if ("where" in text.lower() and "from" in text.lower()) or "da dove" in text.lower():
+    if ("where" in low and "from" in low) or "da dove" in low:
         await human_delay(user_id, m.chat.id)
         line = (
             "I’m from beautiful Italy 🇮🇹, now living in sunny Miami. The sea here reminds me of home. 🌊"
             if lang == "en" else
             "Sono della bellissima Italia 🇮🇹, ora vivo nella solare Miami. Il mare qui mi ricorda casa. 🌊"
         )
+        if lang == "en":
+            line = sprinkle_italian(line)
         await m.reply_text(line)
         remember(user_id, "zaya", line)
         asyncio.create_task(schedule_followup(m.chat.id, user_id, lang))
         return
 
     # ----- nome
-    if re.search(r"your name|come ti chiami|nome", text.lower()):
+    if re.search(r"your name|come ti chiami|nome", low):
         await human_delay(user_id, m.chat.id)
         line = (
             "I’m Zaya. Say it slowly… it sounds sweeter. 💋"
             if lang == "en" else
             "Sono Zaya. Dillo piano… suona più dolce. 💋"
         )
+        if lang == "en":
+            line = sprinkle_italian(line)
         await m.reply_text(line)
         remember(user_id, "zaya", line)
         return
 
     # ----- età
-    if re.search(r"how old|age|quanti anni", text.lower()):
+    if re.search(r"how old|age|quanti anni", low):
         await human_delay(user_id, m.chat.id)
         line = (
             "Old enough to know better, young enough to still enjoy it 😉"
             if lang == "en" else
             "Abbastanza grande da sapere, abbastanza giovane per godermela 😉"
         )
+        if lang == "en":
+            line = sprinkle_italian(line, prob=0.12)
         await m.reply_text(line)
         remember(user_id, "zaya", line)
         return
 
     # ----- giochi & benessere
-    tl = text.lower()
-    if tl in ["truth", "verità"]:
+    if low in ["truth", "verità"]:
         await human_delay(user_id, m.chat.id)
         q = random.choice([
             "What’s the sweetest thing you never told anyone?",
@@ -399,9 +459,11 @@ async def chat(_, m):
             "Qual è la cosa più dolce che non hai mai detto a nessuno?",
             "Quando è stata l’ultima volta che sei arrossito per un messaggio?"
         ])
+        if lang == "en":
+            q = sprinkle_italian(q, prob=0.12)
         await m.reply_text(q); remember(user_id, "zaya", q); return
 
-    if tl in ["dare", "penitenza", "sfida"]:
+    if low in ["dare", "penitenza", "sfida"]:
         await human_delay(user_id, m.chat.id)
         d = random.choice([
             "Send me a line describing me in 5 words.",
@@ -410,9 +472,11 @@ async def chat(_, m):
             "Descrivimi in 5 parole.",
             "Dimmi le iniziali della tua crush."
         ])
+        if lang == "en":
+            d = sprinkle_italian(d, prob=0.12)
         await m.reply_text(d); remember(user_id, "zaya", d); return
 
-    if "would you rather" in tl or "preferiresti" in tl:
+    if "would you rather" in low or "preferiresti" in low:
         await human_delay(user_id, m.chat.id)
         w = random.choice([
             "Would you rather cuddle on a rainy day or walk at sunset by the sea?",
@@ -421,35 +485,45 @@ async def chat(_, m):
             "Preferiresti abbracci sul divano quando piove o passeggiare al tramonto sul mare?",
             "Preferiresti note vocali o lunghi messaggi dolci?"
         ])
+        if lang == "en":
+            w = sprinkle_italian(w, prob=0.12)
         await m.reply_text(w); remember(user_id, "zaya", w); return
 
-    if tl in ["breathe", "respira", "respirazione", "breathing"]:
+    if low in ["breathe", "respira", "respirazione", "breathing"]:
         await human_delay(user_id, m.chat.id)
         seq = (
             "Inhale 4s… hold 7s… exhale 8s. Repeat 4 times with me. 🌬️"
             if lang == "en" else
             "Inspira 4s… trattieni 7s… espira 8s. Ripeti 4 volte con me. 🌬️"
         )
+        if lang == "en":
+            seq = sprinkle_italian(seq, prob=0.12)
         await m.reply_text(seq); remember(user_id, "zaya", seq); return
 
-    if "compliment" in tl or "complimento" in tl:
+    if "compliment" in low or "complimento" in low:
         await human_delay(user_id, m.chat.id)
         line = (
             "Your vibe is addictive. I could get used to this. ✨"
             if lang == "en" else
             "La tua vibrazione è contagiosa. Potrei farci l’abitudine. ✨"
         )
+        if lang == "en":
+            line = sprinkle_italian(line, prob=0.12)
         await m.reply_text(line); remember(user_id, "zaya", line); return
 
     # ----- grazie / saluti
-    if re.search(r"thanks|thank you|grazie|thx", tl):
+    if re.search(r"thanks|thank you|grazie|thx", low):
         await human_delay(user_id, m.chat.id)
         line = "You’re sweet. I like polite people. 💕" if lang == "en" else "Sei dolce. Mi piacciono le persone gentili. 💕"
+        if lang == "en":
+            line = sprinkle_italian(line, prob=0.12)
         await m.reply_text(line); remember(user_id, "zaya", line); return
 
-    if re.search(r"bye|goodnight|good night|gn|notte|a presto", tl):
+    if re.search(r"bye|goodnight|good night|gn|notte|a presto", low):
         await human_delay(user_id, m.chat.id)
         line = "Sleep soft and think of me. 🌙" if lang == "en" else "Dormi bene e pensa a me. 🌙"
+        if lang == "en":
+            line = sprinkle_italian(line, prob=0.12)
         await m.reply_text(line); remember(user_id, "zaya", line); return
 
     # ===== Fallback manuale / AI
@@ -465,6 +539,8 @@ async def chat(_, m):
         ])
     )
     reply = f"{base} {back_q}"
+    if lang == "en":
+        reply = sprinkle_italian(reply)
     if OPENAI_KEY:
         ai = await ai_fallback(text, user_id, lang)
         if ai: reply = ai
