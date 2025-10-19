@@ -7,8 +7,8 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
-
-from pyrogram import Client, filters from pyrogram.enums import ChatAction
+from pyrogram import Client, filters
+from pyrogram.enums import ChatAction
 
 """ Zaya Adaptive Core v3
 
