@@ -22,14 +22,14 @@ Rifiuti eleganti + CTA Fanvue
 
 Ritmo naturale e follow-up vario Compatibile con il tuo setup Pyrogram. """
 
+# ========================
+# ENVIRONMENT VARIABLES
+# ========================
 
-=========================
-
-ENV
-
-=========================
-
-API_ID       = int(os.environ["API_ID"]) API_HASH     = os.environ["API_HASH"] SESSION      = os.environ["PYROGRAM_SESSION"] OPENAI_KEY   = os.environ.get("OPENAI_API_KEY")  # opzionale FANVUE_LINK  = "https://www.fanvue.com/zaya.vir"
+API_ID = int(os.environ["API_ID"])
+API_HASH = os.environ["API_HASH"]
+SESSION = os.environ["PYROGRAM_SESSION"]
+OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 =========================
 
